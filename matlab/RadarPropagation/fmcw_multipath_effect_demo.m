@@ -2,8 +2,8 @@ clear; close all; clc;
 
 %% Parameter
 c = 299792458;                              % velocity of light
-fc = 24e9;                                  % center frequency
-B = 100e6;                                  % chirp bandwidth
+fc = 5e9;                                  % center frequency
+B = 50e6;                                  % chirp bandwidth
 T = 40.96e-6;                               % chirp period
 S = B/T;                                    % chirp slope
 rho = 0.3;                                  % reflectivity
@@ -14,10 +14,10 @@ M = 512;                                    % the number of samples in chirp
 Fs = M/T;                                   % sample rate
 tau = (0:M-1)'/Fs;                          
 n = 0:N-1;
-d0 = 25;
+d0 = 10;
 dr = 10;
-dt = 8.4087335455;
-v = 0;
+dt = 7.41685;
+v = 10;
 r = sqrt(d0^2 + (dt-dr)^2);
 rp = sqrt(d0^2 + (dt+dr)^2);
 range = [r, (r+rp)/2, rp];
@@ -120,7 +120,7 @@ xline(ax3,d0,'--',sprintf('d_0 = %.1f m',d0), ...
 xlabel(ax3,'d_0 (m)')
 ylabel(ax3,'Amplitude ratio (dB)')
 title(ax3,'Amplitude variation versus d_0')
-ylim(ax3,[-25 12])
+% ylim(ax3,[-25 12])
 
 ax4 = nexttile(tl);
 imagesc(ax4,velocityAxis,rangeAxis,RDdb)
