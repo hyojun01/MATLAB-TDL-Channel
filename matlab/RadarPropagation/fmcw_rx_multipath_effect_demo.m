@@ -6,7 +6,7 @@ clear; close all; clc
 %% Parameters
 c = physconst('LightSpeed');
 fc = 24e9;                                  % RF center frequency
-B = 50e6;                                  % sweep bandwidth
+B = 100e6;                                  % sweep bandwidth
 T = 40.96e-6;                               % sweep time
 Fs = 8*B;                                   % oversampled complex-baseband rate
 rho = 0.3;                                  % reflection coefficient
@@ -56,8 +56,13 @@ observe = M+(1:M);                          % remove the initial delay transient
 xrLos = rxLosAll(observe);
 xrMultipath = rxMultipathAll(observe);
 
+%% Mix the received chirp with the transmit reference
+% MATLAB dechirp uses the positive beat-frequency convention used below.
+txReference = xt(observe);
+beatLos = dechirp(xrLos,txReference);
+beatMultipath = dechirp(xrMultipath,txReference);
+
 %% Frequency-domain representation of the received chirp
-% window = 0.5-0.5*cos(2*pi*(0:M-1)'/(M-1));
 Nfft = 2^nextpow2(2*M);
 Xlos = fftshift(fft(xrLos,Nfft));
 Xmp = fftshift(fft(xrMultipath,Nfft));
@@ -66,13 +71,25 @@ spectrumReference = max(abs(Xlos));
 XlosDb = 20*log10(abs(Xlos)/spectrumReference + eps);
 XmpDb = 20*log10(abs(Xmp)/spectrumReference + eps);
 
+beatWindow = 0.5-0.5*cos(2*pi*(0:M-1)'/(M-1));
+BeatLosSpectrum = fftshift(fft(beatLos.*beatWindow,Nfft));
+BeatMultipathSpectrum = fftshift(fft(beatMultipath.*beatWindow,Nfft));
+fBeat = (-Nfft/2:Nfft/2-1)'*Fs/Nfft;
+beatSpectrumReference = max(abs(BeatLosSpectrum));
+BeatLosDb = 20*log10(abs(BeatLosSpectrum)/beatSpectrumReference + eps);
+BeatMultipathDb = 20*log10( ...
+    abs(BeatMultipathSpectrum)/beatSpectrumReference + eps);
+expectedBeatHz = 2*(B/T)*targetRange/c - 2*targetVelocity*fc/c;
+[~,losBeatPeakIndex] = max(abs(BeatLosSpectrum));
+estimatedLosBeatHz = fBeat(losBeatPeakIndex);
+
 timeReference = mean(abs(xrLos));
 fadingDb = 20*log10( ...
     sqrt(mean(abs(xrMultipath).^2))/sqrt(mean(abs(xrLos).^2)));
 
 %% Results
 fig = figure(Color='w',Name='FMCW Received-Signal Multipath Fading');
-tl = tiledlayout(fig,1,2,TileSpacing='compact',Padding='compact');
+tl = tiledlayout(fig,1,3,TileSpacing='compact',Padding='compact');
 
 ax1 = nexttile(tl);
 plot(ax1,t*1e6,abs(xrLos)/timeReference,'--',LineWidth=1.2)
@@ -97,7 +114,27 @@ title(ax2,'Frequency-domain fading')
 legend(ax2,'LOS','Multipath',Location='best')
 ylim(ax2,[-50 5])
 
+ax3 = nexttile(tl);
+plot(ax3,fBeat/1e6,BeatLosDb,'--',LineWidth=1.2)
+hold(ax3,'on')
+plot(ax3,fBeat/1e6,BeatMultipathDb,LineWidth=1.2)
+for k = 1:numel(expectedBeatHz)
+    xline(ax3,expectedBeatHz(k)/1e6,':k',HandleVisibility='off')
+end
+hold(ax3,'off')
+grid(ax3,'on')
+xlabel(ax3,'Beat frequency (MHz)')
+ylabel(ax3,'Magnitude (dB, LOS reference)')
+title(ax3,'Beat-signal spectrum')
+legend(ax3,'LOS','Multipath',Location='best')
+beatMarginHz = 4/T;
+xlim(ax3,[0.25 0.6])
+ylim(ax3,[-50 10])
+
 fprintf('Range resolution: %.3f m\n',c/(2*B))
 fprintf('Excess equivalent ranges: %.6f m, %.6f m\n', ...
     targetRange(2)-targetRange(1),targetRange(3)-targetRange(1))
 fprintf('Received-signal RMS fading: %.2f dB\n',fadingDb)
+fprintf('Expected beat frequencies: %.3f, %.3f, %.3f kHz\n', ...
+    expectedBeatHz/1e3)
+fprintf('Estimated LOS beat peak: %.3f kHz\n',estimatedLosBeatHz/1e3)
